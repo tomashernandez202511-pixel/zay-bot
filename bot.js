@@ -8,7 +8,7 @@ const config = {
   port: 25501,
   username: 'tomastomashernandez202511@outlook.de',
   auth: 'microsoft',
-  version: '1.21.1'
+  version: '1.21.11'
 }
 
 let bot
