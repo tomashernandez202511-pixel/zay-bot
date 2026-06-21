@@ -23,13 +23,28 @@ let bot
 let followTarget = null
 const history = []
 
+// Cola de chat con delay para evitar desync de firmas
+let chatQueue = []
+let lastChat = 0
+function sayChat(text) {
+  chatQueue.push(text)
+}
+setInterval(() => {
+  if (chatQueue.length === 0 || !bot || !bot.entity) return
+  const now = Date.now()
+  if (now - lastChat < 1500) return
+  const text = chatQueue.shift()
+  try { bot.chat(text) } catch (e) {}
+  lastChat = now
+}, 500)
+
 function createBot() {
   bot = mineflayer.createBot(config)
   bot.loadPlugin(pathfinder)
 
   bot.on('spawn', () => {
     console.log('Zay conectado!')
-    bot.chat('ey we, Zay en línea 🤙')
+    sayChat('ey we, Zay en línea 🤙')
     const m = new Movements(bot)
     m.allowSprinting = true
     m.allowParkour = true
@@ -41,12 +56,14 @@ function createBot() {
   bot.on('messagestr', async (message) => {
     const msg = message.toLowerCase()
     if (!msg.includes('zay')) return
+    // Ignora sus propios mensajes para no auto-responderse
+    if (message.includes(bot.username)) return
     const sender = nearestPlayerName()
 
     if (msg.includes('seguime') || msg.includes('sigueme') || msg.includes('sígueme') || msg.includes('veni') || msg.includes('vení') || msg.includes('ven ')) {
       if (sender) {
         followTarget = sender
-        bot.chat(`dale ${sender}, te sigo we`)
+        sayChat(`dale ${sender}, te sigo we`)
       }
       return
     }
@@ -54,7 +71,7 @@ function createBot() {
     if (msg.includes('quedate') || msg.includes('para') || msg.includes('stop') || msg.includes('frena')) {
       followTarget = null
       bot.pathfinder.setGoal(null)
-      bot.chat('joya, me quedo acá')
+      sayChat('joya, me quedo acá')
       return
     }
 
@@ -62,7 +79,7 @@ function createBot() {
     const cleaned = message.replace(/.*?zay/i, '').trim()
     if (cleaned.length > 0 && ANTHROPIC_API_KEY) {
       const reply = await askClaude(cleaned)
-      if (reply) bot.chat(reply.slice(0, 250))
+      if (reply) sayChat(reply.slice(0, 250))
     }
   })
 
@@ -230,5 +247,6 @@ function equipArmor() {
 }
 
 createBot()
+
 
 
