@@ -5,7 +5,7 @@ http.createServer((req, res) => res.end('Zay vivo')).listen(process.env.PORT || 
 
 const config = {
   host: '23.230.3.155',
-  port: 25565,
+  port: 25501,
   username: 'tomastomashernandez202511@outlook.de',
   auth: 'microsoft',
   version: '1.21.1'
