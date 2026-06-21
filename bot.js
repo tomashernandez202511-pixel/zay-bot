@@ -29,7 +29,7 @@ function createBot() {
 
   bot.on('spawn', () => {
     console.log('Zay conectado!')
-    bot.chat('ey we, Zay en línea 🤙')
+    bot.chat('Buenasss, Zay en linea')
     const m = new Movements(bot)
     m.allowSprinting = true
     m.allowParkour = true
