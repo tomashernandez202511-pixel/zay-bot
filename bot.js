@@ -4,7 +4,7 @@ const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 const config = {
   host: '23.230.3.155',
   port: 25779,
-  username: 'tomastomashernandez202511@outlook.de'
+  username: 'tomastomashernandez202511@outlook.de',
   auth: 'microsoft',
   version: '1.21.1'
 }
