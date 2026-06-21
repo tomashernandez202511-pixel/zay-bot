@@ -8,7 +8,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 const config = {
   host: '23.230.3.155',
   port: 25501,
-  username: 'tomastomashernandez202511@gmail.com',
+  username: 'tomymatyhernandez@hotmail.com',
   auth: 'microsoft',
   version: '1.21.11'
 }
