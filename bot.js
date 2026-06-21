@@ -7,8 +7,8 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 
 const config = {
   host: '23.230.3.155',
-  port: 25779,
-  username: 'tomastomashernandez202511@outlook.de',
+  port: 25501,
+  username: 'tomastomashernandez202511@gmail.com',
   auth: 'microsoft',
   version: '1.21.11'
 }
@@ -62,6 +62,13 @@ function createBot() {
     if (bot.username && message.includes(bot.username)) return
 
     const sender = nearestPlayerName()
+
+    // Saludo personalizado
+    if (msg.includes('hola zay') || msg.includes('buenas zay') || msg.includes('ey zay')) {
+      if (sender) sayChat(`hola ${sender}, todo piola? 🤙`)
+      else sayChat('hola we!')
+      return
+    }
 
     if (msg.includes('seguime') || msg.includes('sigueme') || msg.includes('sígueme') || msg.includes('veni') || msg.includes('vení') || msg.includes('ven ')) {
       if (sender) { followTarget = sender; sayChat(`dale ${sender}, te sigo we`) }
