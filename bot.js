@@ -44,12 +44,16 @@ function createBot() {
 
   bot.on('spawn', () => {
     console.log('Zay conectado!')
-    sayChat('ey we, Zay en línea 🤙')
-    const m = new Movements(bot)
-    m.allowSprinting = true
-    m.allowParkour = true
-    m.canDig = false
-    bot.pathfinder.setMovements(m)
+    sayChat('Buenasss zay online!')
+    try {
+      if (bot.pathfinder) {
+        const m = new Movements(bot)
+        m.allowSprinting = true
+        m.allowParkour = true
+        m.canDig = false
+        bot.pathfinder.setMovements(m)
+      }
+    } catch (e) { console.log('Error movements:', e.message) }
     setTimeout(equipArmor, 3000)
   })
 
@@ -70,7 +74,7 @@ function createBot() {
 
     if (msg.includes('quedate') || msg.includes('para') || msg.includes('stop') || msg.includes('frena')) {
       followTarget = null
-      bot.pathfinder.setGoal(null)
+      if (bot.pathfinder) bot.pathfinder.setGoal(null)
       sayChat('joya, me quedo acá')
       return
     }
@@ -93,7 +97,7 @@ function createBot() {
     if (!followTarget || !bot.entity) return
     const player = bot.players[followTarget]
     if (!player || !player.entity) return
-    bot.pathfinder.setGoal(new goals.GoalFollow(player.entity, 2), true)
+    if (bot.pathfinder) bot.pathfinder.setGoal(new goals.GoalFollow(player.entity, 2), true)
   }, 1000)
 
   setInterval(() => {
@@ -247,6 +251,4 @@ function equipArmor() {
 }
 
 createBot()
-
-
 
