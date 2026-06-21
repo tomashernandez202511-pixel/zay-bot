@@ -29,7 +29,7 @@ function createBot() {
 
   bot.on('spawn', () => {
     console.log('Zay conectado!')
-    bot.chat('Buenasss, Zay en linea')
+    bot.chat('ey we, Zay en línea 🤙')
     const m = new Movements(bot)
     m.allowSprinting = true
     m.allowParkour = true
@@ -43,7 +43,6 @@ function createBot() {
     if (!msg.includes('zay')) return
     const sender = nearestPlayerName()
 
-    // Comandos de movimiento
     if (msg.includes('seguime') || msg.includes('sigueme') || msg.includes('sígueme') || msg.includes('veni') || msg.includes('vení') || msg.includes('ven ')) {
       if (sender) {
         followTarget = sender
@@ -59,7 +58,7 @@ function createBot() {
       return
     }
 
-    // Cualquier otra cosa → responde con IA
+    // Cualquier otra cosa con "zay" → responde con IA
     const cleaned = message.replace(/.*?zay/i, '').trim()
     if (cleaned.length > 0 && ANTHROPIC_API_KEY) {
       const reply = await askClaude(cleaned)
@@ -67,23 +66,19 @@ function createBot() {
     }
   })
 
-  // Mira al jugador que lo golpea
   bot.on('entityHurt', (entity) => {
     if (entity !== bot.entity) return
     const attacker = nearestPlayer()
     if (attacker) bot.lookAt(attacker.position.offset(0, attacker.height, 0))
   })
 
-  // Loop de seguimiento
   setInterval(() => {
     if (!followTarget || !bot.entity) return
     const player = bot.players[followTarget]
     if (!player || !player.entity) return
-    const { x, y, z } = player.entity.position
     bot.pathfinder.setGoal(new goals.GoalFollow(player.entity, 2), true)
   }, 1000)
 
-  // Atacar mobs hostiles cercanos
   setInterval(() => {
     if (!bot.entity || followTarget) return
     const mob = nearestHostile()
@@ -93,14 +88,12 @@ function createBot() {
     }
   }, 1000)
 
-  // Mira al jugador más cercano
   setInterval(() => {
     if (followTarget || !bot.entity) return
     const player = nearestPlayer()
     if (player && Math.random() < 0.5) bot.lookAt(player.position.offset(0, player.height, 0))
   }, 2000)
 
-  // Saludo al acercarse
   let greeted = {}
   setInterval(() => {
     if (!bot.entity) return
@@ -122,7 +115,6 @@ function createBot() {
     if (collector.username === bot.username) setTimeout(equipArmor, 1000)
   })
 
-  // Movimiento random
   setInterval(() => {
     if (followTarget || !bot.entity) return
     const r = Math.random()
@@ -165,6 +157,7 @@ async function askClaude(userMessage) {
       })
     })
     const data = await res.json()
+    if (!data.content) { console.log('Respuesta API:', JSON.stringify(data)); return null }
     const reply = data.content[0].text
     history.push({ role: 'assistant', content: reply })
     return reply
@@ -237,4 +230,5 @@ function equipArmor() {
 }
 
 createBot()
+
 
