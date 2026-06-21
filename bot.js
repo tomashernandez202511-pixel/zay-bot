@@ -3,6 +3,8 @@ const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 const http = require('http')
 http.createServer((req, res) => res.end('Zay vivo')).listen(process.env.PORT || 3000)
 
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
+
 const config = {
   host: '23.230.3.155',
   port: 25501,
@@ -11,8 +13,15 @@ const config = {
   version: '1.21.11'
 }
 
+const SYSTEM_PROMPT =
+  "Sos Zay, un pibe chill que está en un servidor de Minecraft entre amigos. " +
+  "Hablás relajado y argentino casual, usás 'we', 'dale', 'tranqui', 'joya', 're', 'piola'. " +
+  "Respondés corto, de onda, nunca te estresás. Respondés preguntas de la vida como un amigo. " +
+  "Máximo 2 oraciones. Nunca rompas el personaje."
+
 let bot
 let followTarget = null
+const history = []
 
 function createBot() {
   bot = mineflayer.createBot(config)
@@ -21,36 +30,40 @@ function createBot() {
   bot.on('spawn', () => {
     console.log('Zay conectado!')
     bot.chat('ey we, Zay en línea 🤙')
+    const m = new Movements(bot)
+    m.allowSprinting = true
+    m.allowParkour = true
+    m.canDig = false
+    bot.pathfinder.setMovements(m)
     setTimeout(equipArmor, 3000)
   })
 
-  bot.on('chat', (username, message) => {
-    if (username === bot.username) return
+  bot.on('messagestr', async (message) => {
     const msg = message.toLowerCase()
+    if (!msg.includes('zay')) return
+    const sender = nearestPlayerName()
 
-    if (msg.includes('zay seguime') || msg.includes('zay sígueme') || msg.includes('zay sigueme')) {
-      const player = bot.players[username]
-      if (player && player.entity) {
-        followTarget = username
-        bot.chat(`dale ${username}, te sigo we`)
+    // Comandos de movimiento
+    if (msg.includes('seguime') || msg.includes('sigueme') || msg.includes('sígueme') || msg.includes('veni') || msg.includes('vení') || msg.includes('ven ')) {
+      if (sender) {
+        followTarget = sender
+        bot.chat(`dale ${sender}, te sigo we`)
       }
       return
     }
 
-    if (msg.includes('zay quedate') || msg.includes('zay para') || msg.includes('zay stop')) {
+    if (msg.includes('quedate') || msg.includes('para') || msg.includes('stop') || msg.includes('frena')) {
       followTarget = null
       bot.pathfinder.setGoal(null)
       bot.chat('joya, me quedo acá')
       return
     }
 
-    if (msg.includes('zay ven') || msg.includes('zay venite') || msg.includes('zay veni')) {
-      const player = bot.players[username]
-      if (player && player.entity) {
-        followTarget = username
-        bot.chat('ya voy we')
-      }
-      return
+    // Cualquier otra cosa → responde con IA
+    const cleaned = message.replace(/.*?zay/i, '').trim()
+    if (cleaned.length > 0 && ANTHROPIC_API_KEY) {
+      const reply = await askClaude(cleaned)
+      if (reply) bot.chat(reply.slice(0, 250))
     }
   })
 
@@ -58,9 +71,7 @@ function createBot() {
   bot.on('entityHurt', (entity) => {
     if (entity !== bot.entity) return
     const attacker = nearestPlayer()
-    if (attacker) {
-      bot.lookAt(attacker.position.offset(0, attacker.height, 0))
-    }
+    if (attacker) bot.lookAt(attacker.position.offset(0, attacker.height, 0))
   })
 
   // Loop de seguimiento
@@ -69,21 +80,27 @@ function createBot() {
     const player = bot.players[followTarget]
     if (!player || !player.entity) return
     const { x, y, z } = player.entity.position
-    const movements = new Movements(bot)
-    bot.pathfinder.setMovements(movements)
-    bot.pathfinder.setGoal(new goals.GoalNear(x, y, z, 2), true)
+    bot.pathfinder.setGoal(new goals.GoalFollow(player.entity, 2), true)
   }, 1000)
 
-  // Mira al jugador más cercano de vez en cuando
+  // Atacar mobs hostiles cercanos
+  setInterval(() => {
+    if (!bot.entity || followTarget) return
+    const mob = nearestHostile()
+    if (mob) {
+      bot.lookAt(mob.position.offset(0, mob.height, 0))
+      bot.attack(mob)
+    }
+  }, 1000)
+
+  // Mira al jugador más cercano
   setInterval(() => {
     if (followTarget || !bot.entity) return
     const player = nearestPlayer()
-    if (player && Math.random() < 0.5) {
-      bot.lookAt(player.position.offset(0, player.height, 0))
-    }
+    if (player && Math.random() < 0.5) bot.lookAt(player.position.offset(0, player.height, 0))
   }, 2000)
 
-  // Saluda agachándose cuando alguien se acerca
+  // Saludo al acercarse
   let greeted = {}
   setInterval(() => {
     if (!bot.entity) return
@@ -94,9 +111,7 @@ function createBot() {
         bot.lookAt(player.position.offset(0, player.height, 0))
         crouchGreet()
       }
-    } else {
-      greeted = {}
-    }
+    } else greeted = {}
   }, 1500)
 
   bot.on('health', () => {
@@ -107,7 +122,7 @@ function createBot() {
     if (collector.username === bot.username) setTimeout(equipArmor, 1000)
   })
 
-  // Movimiento random (más activo)
+  // Movimiento random
   setInterval(() => {
     if (followTarget || !bot.entity) return
     const r = Math.random()
@@ -125,23 +140,38 @@ function createBot() {
     }
   }, 2500)
 
-  bot.on('kicked', (reason) => {
-    console.log('Kickeado:', reason)
-    followTarget = null
-    setTimeout(createBot, 5000)
-  })
+  bot.on('kicked', (reason) => { console.log('Kickeado:', reason); followTarget = null; setTimeout(createBot, 8000) })
+  bot.on('error', (err) => { console.log('Error:', err.message); followTarget = null; setTimeout(createBot, 8000) })
+  bot.on('end', () => { console.log('Desconectado, reconectando...'); followTarget = null; setTimeout(createBot, 8000) })
+}
 
-  bot.on('error', (err) => {
-    console.log('Error:', err.message)
-    followTarget = null
-    setTimeout(createBot, 5000)
-  })
+async function askClaude(userMessage) {
+  try {
+    history.push({ role: 'user', content: userMessage })
+    if (history.length > 10) history.splice(0, 2)
 
-  bot.on('end', () => {
-    console.log('Desconectado, reconectando...')
-    followTarget = null
-    setTimeout(createBot, 5000)
-  })
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5',
+        max_tokens: 150,
+        system: SYSTEM_PROMPT,
+        messages: history
+      })
+    })
+    const data = await res.json()
+    const reply = data.content[0].text
+    history.push({ role: 'assistant', content: reply })
+    return reply
+  } catch (e) {
+    console.log('Error IA:', e.message)
+    return null
+  }
 }
 
 function crouchGreet() {
@@ -150,15 +180,17 @@ function crouchGreet() {
     if (!bot.entity) { clearInterval(interval); return }
     bot.setControlState('sneak', count % 2 === 0)
     count++
-    if (count >= 4) {
-      clearInterval(interval)
-      bot.setControlState('sneak', false)
-    }
+    if (count >= 4) { clearInterval(interval); bot.setControlState('sneak', false) }
   }, 200)
 }
 
-function nearestPlayer() {
-  let nearest = null, dist = 8
+function nearestPlayerName() {
+  const e = nearestPlayer(16)
+  return e ? e.username : null
+}
+
+function nearestPlayer(maxDist) {
+  let nearest = null, dist = maxDist || 8
   for (const e of Object.values(bot.entities)) {
     if (e.type === 'player' && e.username !== bot.username) {
       const d = bot.entity.position.distanceTo(e.position)
@@ -168,7 +200,19 @@ function nearestPlayer() {
   return nearest
 }
 
-function eatFood() {   
+function nearestHostile() {
+  const hostiles = ['zombie', 'skeleton', 'spider', 'creeper', 'witch', 'enderman', 'husk', 'stray', 'drowned', 'pillager', 'zombified_piglin']
+  let nearest = null, dist = 4
+  for (const e of Object.values(bot.entities)) {
+    if (e.type === 'mob' && e.name && hostiles.includes(e.name.toLowerCase())) {
+      const d = bot.entity.position.distanceTo(e.position)
+      if (d < dist) { dist = d; nearest = e }
+    }
+  }
+  return nearest
+}
+
+function eatFood() {
   const foodItems = bot.inventory.items().filter(item =>
     ['bread','cooked','apple','carrot','potato','beef','pork','chicken','mutton','rabbit','salmon','cod','melon'].some(f => item.name.includes(f))
   )
@@ -193,3 +237,4 @@ function equipArmor() {
 }
 
 createBot()
+
