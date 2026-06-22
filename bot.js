@@ -7,32 +7,41 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 
 const config = {
   host: '23.230.3.155',
-  port: 25779,
-  username: 'tomymatyhernandez@hotmail.com',
+  port: 25501,
+  username: 'tomastomashernandez202511@gmail.com',
   auth: 'microsoft',
   version: '1.21.11'
 }
 
 const SYSTEM_PROMPT =
-  "Sos Zay, un pibe chill que está en un servidor de Minecraft entre amigos. " +
-  "Hablás relajado y argentino casual, usás 'we', 'dale', 'tranqui', 'joya', 're', 'piola'. " +
-  "Respondés corto, de onda, nunca te estresás. Respondés preguntas de la vida como un amigo. " +
-  "Máximo 2 oraciones. Nunca rompas el personaje."
+  "Sos Zay, un pibe argentino menor de edad, re chill, que está en un servidor de Minecraft entre amigos. " +
+  "Hablás relajado y argentino casual, usás 'we', 'dale', 'tranqui', 'joya', 're', 'piola', 'posta'. " +
+  "Respondés cualquier pregunta de la vida como un amigo, corto y de onda. Máximo 2 oraciones. Nunca rompas el personaje."
+
+// Prompt para interpretar intención de acción
+const INTENT_PROMPT =
+  "Sos el cerebro de Zay, un bot de Minecraft. Te paso un mensaje de un jugador. " +
+  "Decidí qué quiere que haga Zay y respondé SOLO con una palabra de esta lista:\n" +
+  "PERLA = quiere que tire/lance una perla de ender\n" +
+  "BLOQUE = quiere que ponga/coloque un bloque o construya\n" +
+  "CERCA = pregunta qué hay cerca, quién está cerca, qué ve\n" +
+  "COMER = quiere que coma\n" +
+  "TIRAR = quiere que tire/dropee el item de la mano\n" +
+  "SEGUIR = quiere que lo siga\n" +
+  "PARAR = quiere que pare de seguir / se quede quieto\n" +
+  "CHAT = cualquier otra cosa (charla, preguntas, saludos)\n" +
+  "Respondé SOLO la palabra, nada más."
 
 let bot = null
 let followTarget = null
 let ready = false
 const history = []
 
-// Cola de chat para no saturar el sistema de firmas del server
 let chatQueue = []
 let lastChat = 0
 function sayChat(text) { chatQueue.push(text) }
 
-// Helper: bot está realmente listo para usarse
-function botReady() {
-  return bot && ready && bot.entity && bot.entities
-}
+function botReady() { return bot && ready && bot.entity && bot.entities }
 
 function createBot() {
   bot = mineflayer.createBot(config)
@@ -55,6 +64,12 @@ function createBot() {
     setTimeout(() => { if (botReady()) equipArmor() }, 3000)
   })
 
+  bot.on('death', () => {
+    console.log('Zay murió')
+    sayChat('uh me morí we 💀 esperá que vuelvo')
+    followTarget = null
+  })
+
   bot.on('messagestr', async (message) => {
     if (!botReady()) return
     const msg = message.toLowerCase()
@@ -62,36 +77,37 @@ function createBot() {
     if (bot.username && message.includes(bot.username)) return
 
     const sender = nearestPlayerName()
+    const cleaned = message.replace(/.*?zay/i, '').trim()
 
-    // Saludo personalizado
+    // Saludo rápido
     if (msg.includes('hola zay') || msg.includes('buenas zay') || msg.includes('ey zay')) {
       if (sender) sayChat(`hola ${sender}, todo piola? 🤙`)
       else sayChat('hola we!')
       return
     }
 
-    if (msg.includes('seguime') || msg.includes('sigueme') || msg.includes('sígueme') || msg.includes('veni') || msg.includes('vení') || msg.includes('ven ')) {
-      if (sender) { followTarget = sender; sayChat(`dale ${sender}, te sigo we`) }
-      return
-    }
-    if (msg.includes('quedate') || msg.includes('para ') || msg.includes('stop') || msg.includes('frena')) {
-      followTarget = null
-      try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch (e) {}
-      sayChat('joya, me quedo acá')
-      return
-    }
-    if (msg.includes('come') || msg.includes('comé') || msg.includes('come ')) {
-      eatFood(); return
-    }
-    if (msg.includes('tira') || msg.includes('tirá') || msg.includes('dropea')) {
-      dropHand(); return
-    }
+    if (!ANTHROPIC_API_KEY) return
 
-    // Otra cosa con "zay" → IA
-    const cleaned = message.replace(/.*?zay/i, '').trim()
-    if (cleaned.length > 0 && ANTHROPIC_API_KEY) {
-      const reply = await askClaude(cleaned)
-      if (reply) sayChat(reply.slice(0, 250))
+    // Interpretar intención con IA
+    const intent = await getIntent(cleaned)
+
+    switch (intent) {
+      case 'PERLA': throwPearl(); break
+      case 'BLOQUE': placeBlock(); break
+      case 'CERCA': tellNearby(); break
+      case 'COMER': eatFood(); break
+      case 'TIRAR': dropHand(); break
+      case 'SEGUIR':
+        if (sender) { followTarget = sender; sayChat(`dale ${sender}, te sigo we`) }
+        break
+      case 'PARAR':
+        followTarget = null
+        try { if (bot.pathfinder) bot.pathfinder.setGoal(null) } catch (e) {}
+        sayChat('joya, me quedo acá')
+        break
+      default:
+        const reply = await askClaude(cleaned)
+        if (reply) sayChat(reply.slice(0, 250))
     }
   })
 
@@ -113,14 +129,12 @@ function createBot() {
   bot.on('error', (err) => { console.log('Error:', err.message); ready = false })
   bot.on('end', () => {
     console.log('Desconectado, reconectando en 15s...')
-    ready = false
-    followTarget = null
-    bot = null
+    ready = false; followTarget = null; bot = null
     setTimeout(createBot, 15000)
   })
 }
 
-// ---- Loops (con guardas) ----
+// ---- Loops ----
 
 setInterval(() => {
   if (chatQueue.length === 0 || !botReady()) return
@@ -138,14 +152,15 @@ setInterval(() => {
   try { if (bot.pathfinder) bot.pathfinder.setGoal(new goals.GoalFollow(player.entity, 2), true) } catch (e) {}
 }, 1000)
 
+// Atacar mobs automático
 setInterval(() => {
-  if (!botReady() || followTarget) return
+  if (!botReady()) return
   const mob = nearestHostile()
   if (mob) {
     bot.lookAt(mob.position.offset(0, mob.height, 0)).catch(() => {})
     try { bot.attack(mob) } catch (e) {}
   }
-}, 1000)
+}, 800)
 
 setInterval(() => {
   if (!botReady() || followTarget) return
@@ -183,7 +198,20 @@ setInterval(() => {
   }
 }, 2500)
 
-// ---- Funciones ----
+// ---- IA ----
+
+async function getIntent(userMessage) {
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5', max_tokens: 10, system: INTENT_PROMPT, messages: [{ role: 'user', content: userMessage }] })
+    })
+    const data = await res.json()
+    if (!data.content) return 'CHAT'
+    return data.content[0].text.trim().toUpperCase()
+  } catch (e) { return 'CHAT' }
+}
 
 async function askClaude(userMessage) {
   try {
@@ -200,6 +228,50 @@ async function askClaude(userMessage) {
     history.push({ role: 'assistant', content: reply })
     return reply
   } catch (e) { console.log('Error IA:', e.message); return null }
+}
+
+// ---- Acciones ----
+
+function throwPearl() {
+  if (!botReady()) return
+  const pearl = bot.inventory.items().find(i => i.name.includes('ender_pearl'))
+  if (!pearl) { sayChat('no tengo perlas we'); return }
+  bot.equip(pearl, 'hand').then(() => {
+    bot.look(bot.entity.yaw, -0.4, true).then(() => {
+      bot.activateItem()
+      sayChat('ahí va la perla 🔮')
+    }).catch(() => {})
+  }).catch(() => {})
+}
+
+function placeBlock() {
+  if (!botReady()) return
+  const block = bot.inventory.items().find(i =>
+    i.name.includes('stone') || i.name.includes('dirt') || i.name.includes('plank') ||
+    i.name.includes('cobble') || i.name.includes('wool') || i.name.includes('concrete')
+  )
+  if (!block) { sayChat('no tengo bloques para poner we'); return }
+  const ref = bot.blockAt(bot.entity.position.offset(0, -1, 0))
+  if (!ref) { sayChat('no encuentro dónde poner'); return }
+  bot.equip(block, 'hand').then(() => {
+    bot.placeBlock(ref, { x: 0, y: 1, z: 0 }).then(() => sayChat('listo, bloque puesto 🧱')).catch(() => sayChat('no pude poner el bloque acá'))
+  }).catch(() => {})
+}
+
+function tellNearby() {
+  if (!botReady()) return
+  const players = [], mobs = []
+  for (const e of Object.values(bot.entities)) {
+    if (!e || !e.position) continue
+    const d = bot.entity.position.distanceTo(e.position)
+    if (d > 16) continue
+    if (e.type === 'player' && e.username !== bot.username) players.push(e.username)
+    else if (e.type === 'mob' && e.name) mobs.push(e.name)
+  }
+  let parts = []
+  if (players.length) parts.push(`jugadores: ${players.join(', ')}`)
+  if (mobs.length) parts.push(`mobs: ${mobs.slice(0, 5).join(', ')}`)
+  sayChat(parts.length ? `tengo cerca → ${parts.join(' | ')}` : 'no hay nada cerca we, todo tranqui')
 }
 
 function crouchGreet() {
@@ -231,8 +303,8 @@ function nearestPlayer(maxDist) {
 
 function nearestHostile() {
   if (!botReady()) return null
-  const hostiles = ['zombie', 'skeleton', 'spider', 'creeper', 'witch', 'enderman', 'husk', 'stray', 'drowned', 'pillager', 'zombified_piglin']
-  let nearest = null, dist = 4
+  const hostiles = ['zombie', 'skeleton', 'spider', 'creeper', 'witch', 'enderman', 'husk', 'stray', 'drowned', 'pillager', 'zombified_piglin', 'cave_spider', 'silverfish', 'slime', 'phantom', 'vindicator']
+  let nearest = null, dist = 5
   for (const e of Object.values(bot.entities)) {
     if (e && e.type === 'mob' && e.name && hostiles.includes(e.name.toLowerCase())) {
       const d = bot.entity.position.distanceTo(e.position)
@@ -249,13 +321,14 @@ function eatFood() {
   )
   if (foodItems.length > 0) {
     bot.equip(foodItems[0], 'hand').then(() => bot.consume().catch(() => {})).catch(() => {})
-  }
+  } else sayChat('no tengo nada para comer we')
 }
 
 function dropHand() {
   if (!botReady()) return
   const item = bot.heldItem
-  if (item) bot.tossStack(item).catch(() => {})
+  if (item) { bot.tossStack(item).catch(() => {}); sayChat('ahí lo tiré') }
+  else sayChat('no tengo nada en la mano')
 }
 
 function equipArmor() {
@@ -275,4 +348,3 @@ function equipArmor() {
 }
 
 createBot()
-
