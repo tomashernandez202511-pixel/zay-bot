@@ -6,7 +6,7 @@
     "start": "node bot.js"
   },
   "dependencies": {
-    "mineflayer": "^4.37.1",
+    "mineflayer": "npm:mineflayer-protocol-774@4.33.5",
     "mineflayer-pathfinder": "^2.4.5"
   }
 }
