@@ -48,6 +48,11 @@ function createBot() {
   bot.loadPlugin(pathfinder)
   ready = false
 
+  // Aceptar resource pack automáticamente (necesario en servers 1.21.11)
+  bot.on('resourcePack', () => {
+    try { bot.acceptResourcePack() } catch (e) {}
+  })
+
   bot.once('spawn', () => {
     console.log('Zay conectado!')
     ready = true
