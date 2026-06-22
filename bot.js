@@ -1,4 +1,4 @@
-const mineflayer = require('mineflayer')
+const mineflayer = require('mineflayer-protocol-774')
 const { pathfinder, Movements, goals } = require('mineflayer-pathfinder')
 const http = require('http')
 http.createServer((req, res) => res.end('Zay vivo')).listen(process.env.PORT || 3000)
