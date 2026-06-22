@@ -10,7 +10,7 @@ const config = {
   port: 25501,
   username: 'tomastomashernandez202511@gmail.com',
   auth: 'microsoft',
-  version: '1.21.4'
+  version: '1.21.11'
 }
 
 const SYSTEM_PROMPT =
